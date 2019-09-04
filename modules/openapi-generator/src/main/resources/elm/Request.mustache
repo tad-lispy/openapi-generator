@@ -1,0 +1,24 @@
+module Api.Request exposing
+    ( Method(..)
+    , Request
+    )
+
+import Http
+import Json.Decode
+import Json.Encode
+import Url.Builder exposing (QueryParameter)
+
+
+type alias Request a =
+    { method : Method
+    , path : List String
+    , query : List QueryParameter
+    , headers : List Http.Header
+    , body : Maybe Json.Encode.Value
+    , decoder : Json.Decode.Decoder a
+    }
+
+
+type Method
+    = GET
+    | POST

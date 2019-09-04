@@ -199,8 +199,9 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
                 LOGGER.info("Elm version: 0.18");
                 additionalProperties.put("isElm018", true);
                 apiTemplateFiles.put("api018.mustache", ".elm");
-                supportingFiles.add(new SupportingFile("DateOnly018.mustache", "src", "DateOnly.elm"));
-                supportingFiles.add(new SupportingFile("DateTime018.mustache", "src", "DateTime.elm"));
+                supportingFiles.add(new SupportingFile("Request.mustache", "src/Api", "Request.elm"));
+                supportingFiles.add(new SupportingFile("DateOnly018.mustache", "src/Api", "DateOnly.elm"));
+                supportingFiles.add(new SupportingFile("DateTime018.mustache", "src/Api", "DateTime.elm"));
                 supportingFiles.add(new SupportingFile("elm-package018.mustache", "", "elm-package.json"));
                 supportingFiles.add(new SupportingFile("Main018.mustache", "src", "Main.elm"));
                 break;
@@ -208,8 +209,9 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
                 LOGGER.info("Elm version: 0.19");
                 additionalProperties.put("isElm019", true);
                 apiTemplateFiles.put("api.mustache", ".elm");
-                supportingFiles.add(new SupportingFile("DateOnly.mustache", "src", "DateOnly.elm"));
-                supportingFiles.add(new SupportingFile("DateTime.mustache", "src", "DateTime.elm"));
+                supportingFiles.add(new SupportingFile("Request.mustache", "src/Api", "Request.elm"));
+                supportingFiles.add(new SupportingFile("DateOnly.mustache", "src/Api", "DateOnly.elm"));
+                supportingFiles.add(new SupportingFile("DateTime.mustache", "src/Api", "DateTime.elm"));
                 supportingFiles.add(new SupportingFile("elm.mustache", "", "elm.json"));
                 supportingFiles.add(new SupportingFile("Main.mustache", "src", "Main.elm"));
                 break;
@@ -217,7 +219,7 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
                 throw new RuntimeException("Undefined Elm version");
         }
 
-        supportingFiles.add(new SupportingFile("Byte.mustache", "src", "Byte.elm"));
+        supportingFiles.add(new SupportingFile("Byte.mustache", "src/Api", "Byte.elm"));
         supportingFiles.add(new SupportingFile("gitignore.mustache", "", ".gitignore"));
         supportingFiles.add(new SupportingFile("README.mustache", "", "README.md"));
     }
@@ -295,12 +297,12 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
 
     @Override
     public String apiFileFolder() {
-        return outputFolder + ("/src/Request/" + apiPackage().replace('.', File.separatorChar)).replace("/", File.separator);
+        return outputFolder + ("/src/Api/Request/" + apiPackage().replace('.', File.separatorChar)).replace("/", File.separator);
     }
 
     @Override
     public String modelFileFolder() {
-        return outputFolder + ("/src/Data/" + modelPackage().replace('.', File.separatorChar)).replace("/", File.separator);
+        return outputFolder + ("/src/Api/Data/" + modelPackage().replace('.', File.separatorChar)).replace("/", File.separator);
     }
 
     @Override
@@ -398,11 +400,9 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
     private ElmImport createImport(final String name) {
         final ElmImport elmImport = new ElmImport();
         final boolean isData = !customPrimitives.contains(name);
-        final String modulePrefix = isData ? "Data." : "";
+        final String modulePrefix = isData ? "Api.Data." : "Api.";
         elmImport.moduleName = modulePrefix + name;
-        if (isData) {
-            elmImport.as = name;
-        }
+        elmImport.as = name;
         elmImport.exposures = new TreeSet<>();
         elmImport.exposures.add(name);
         elmImport.hasExposures = true;
@@ -493,7 +493,7 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
         for (Map.Entry<String, Set<String>> entry : dependencies.entrySet()) {
             final ElmImport elmImport = new ElmImport();
             final String key = entry.getKey();
-            elmImport.moduleName = "Data." + key;
+            elmImport.moduleName = "Api.Data." + key;
             elmImport.as = key;
             elmImport.exposures = entry.getValue();
             elmImport.exposures.add(key);
@@ -503,10 +503,11 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
         final boolean hasDate = anyOperationParam(ops, param -> param.isDate);
         if (hasDate) {
             final ElmImport elmImport = new ElmImport();
-            elmImport.moduleName = "DateOnly";
+            elmImport.moduleName = "Api.DateOnly";
             elmImport.exposures = new TreeSet<>();
             elmImport.exposures.add("DateOnly");
             elmImport.hasExposures = true;
+            elmImport.as = "DateOnly";
             elmImports.add(elmImport);
         }
         final boolean hasDateTime = anyOperationParam(ops, param -> param.isDateTime);
@@ -516,6 +517,7 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
             elmImport.exposures = new TreeSet<>();
             elmImport.exposures.add("DateTime");
             elmImport.hasExposures = true;
+            elmImport.as = "DateTime";
             elmImports.add(elmImport);
         }
         final boolean hasUuid = anyOperationParam(ops, param -> param.isUuid);
@@ -525,6 +527,7 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
             elmImport.exposures = new TreeSet<>();
             elmImport.exposures.add("Uuid");
             elmImport.hasExposures = true;
+            elmImport.as = "Uuid";
             elmImports.add(elmImport);
         }
         operations.put("elmImports", elmImports);
@@ -611,7 +614,8 @@ public class ElmClientCodegen extends DefaultCodegen implements CodegenConfig {
     }
 
     private String paramToString(final String prefix, final CodegenParameter param, final boolean useMaybe, final String maybeMapResult) {
-        final String paramName = (ElmVersion.ELM_018.equals(elmVersion) ? "" : prefix + ".") + param.paramName;
+        /* NOTE: we ignore the prefix. All parameters are passed as arguments, no records are involved. */
+        final String paramName = param.paramName;
         if (!useMaybe) {
             param.required = true;
         }

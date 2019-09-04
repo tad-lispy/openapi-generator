@@ -1,11 +1,13 @@
 {{>licenseInfo}}
 
-module Request.{{classname}} exposing ({{#operations}}{{#operation}}{{^-first}}, {{/-first}}{{operationId}}{{#allParams}}{{#isEnum}}, {{enumName}}(..){{/isEnum}}{{/allParams}}{{/operation}}{{/operations}})
+module Api.Request.{{classname}} exposing ({{#operations}}{{#operation}}{{^-first}}, {{/-first}}{{operationId}}{{#allParams}}{{#isEnum}}, {{enumName}}(..){{/isEnum}}{{/allParams}}{{/operation}}{{/operations}})
 
-{{>imports}}import Dict
-import Http
+{{>imports}}
+import Dict exposing (Dict)
 import Json.Decode as Decode
-import Url.Builder as Url
+import Url.Builder
+import Maybe.Extra as Maybe
+import Api.Request exposing (Request, Method(..))
 
 
 {{#operations}}
@@ -31,10 +33,6 @@ type {{enumName}}
 {{/operations}}
 
 
-{{^enableCustomBasePaths}}basePath : String
-basePath =
-    "{{basePath}}"
-{{/enableCustomBasePaths}}
 {{#operations}}
   {{#operation}}
 
@@ -44,29 +42,34 @@ basePath =
 -}
 {{/notes}}
 {{operationId}} :
+{{#pathParams}}
+    {{#isListContainer}}List {{/isListContainer}}{{#datatypeWithEnum}}{{datatypeWithEnum}}{{/datatypeWithEnum}}{{^datatypeWithEnum}}{{dataType}}{{/datatypeWithEnum}} ->
+{{/pathParams}}
+{{#queryParams}}
+    {{^required}}Maybe ({{/required}}{{#isListContainer}}List {{/isListContainer}}{{#datatypeWithEnum}}{{datatypeWithEnum}}{{/datatypeWithEnum}}{{^datatypeWithEnum}}{{dataType}}{{/datatypeWithEnum}}{{^required}}){{/required}} ->
+{{/queryParams}}
 {{#headerParams}}
-{{#-first}}    { {{/-first}}{{^-first}}    , {{/-first}}{{paramName}} : {{^required}}Maybe ({{/required}}{{#isListContainer}}List {{/isListContainer}}{{dataType}}{{^required}}){{/required}}
-{{#-last}}    } -> {{/-last}}
+    -- TODO: Header params are not supported by the OpenAPI code generator. Fix it in api.mustache file.
+    {{^required}}Maybe ({{/required}}{{#isListContainer}}List {{/isListContainer}}{{dataType}}{{^required}}){{/required}} ->
 {{/headerParams}}
-    { onSend : Result Http.Error {{^responses}}(){{/responses}}{{#responses}}{{#-first}}{{^dataType}}(){{/dataType}}{{#isMapContainer}}(Dict.Dict String {{/isMapContainer}}{{#isListContainer}}(List {{/isListContainer}}{{dataType}}{{#isListContainer}}){{/isListContainer}}{{#isMapContainer}}){{/isMapContainer}}{{/-first}}{{/responses}} -> msg
-{{#enableCustomBasePaths}}    , basePath : String{{/enableCustomBasePaths}}
-{{#enableHttpRequestTrackers}}    , tracker : Maybe String{{/enableHttpRequestTrackers}}
-{{#bodyParam}}    , body : {{^required}}Maybe {{/required}}{{dataType}}{{/bodyParam}}
-{{#pathParams}}    , {{paramName}} : {{#isListContainer}}List {{/isListContainer}}{{#datatypeWithEnum}}{{datatypeWithEnum}}{{/datatypeWithEnum}}{{^datatypeWithEnum}}{{dataType}}{{/datatypeWithEnum}}{{/pathParams}}
-{{#queryParams}}    , {{paramName}} : {{^required}}Maybe ({{/required}}{{#isListContainer}}List {{/isListContainer}}{{#datatypeWithEnum}}{{datatypeWithEnum}}{{/datatypeWithEnum}}{{^datatypeWithEnum}}{{dataType}}{{/datatypeWithEnum}}{{^required}}){{/required}}{{/queryParams}}
-    }
-    -> Cmd msg
-{{operationId}} {{#headerParams.0}}headers {{/headerParams.0}}params =
-    Http.request
-        { method = "{{httpMethod}}"
-        , headers = {{#headerParams.0}}List.filterMap identity {{/headerParams.0}}[{{{vendorExtensions.headers}}}]
-        , url = Url.crossOrigin {{#enableCustomBasePaths}}params.{{/enableCustomBasePaths}}basePath
-            [{{{path}}}]
-            {{#queryParams.0}}(List.filterMap identity {{/queryParams.0}}[{{{vendorExtensions.query}}}]{{#queryParams.0}}){{/queryParams.0}}
-        , body = {{#bodyParam}}{{^required}}Maybe.withDefault Http.emptyBody <| Maybe.map ({{/required}}Http.jsonBody {{#required}}<|{{/required}}{{^required}}<<{{/required}} {{vendorExtensions.elmEncoder}}{{^required}}){{/required}} params.body{{/bodyParam}}{{^bodyParam}}Http.emptyBody{{/bodyParam}}
-        , expect = {{^responses}}Http.expectWhatever params.onSend{{/responses}}{{#responses}}{{#-first}}{{^dataType}}Http.expectWhatever params.onSend{{/dataType}}{{#dataType}}Http.expectJson params.onSend {{#isMapContainer}}(Decode.dict {{/isMapContainer}}{{#isListContainer}}(Decode.list {{/isListContainer}}{{#vendorExtensions}}{{elmDecoder}}{{/vendorExtensions}}{{#isListContainer}}){{/isListContainer}}{{#isMapContainer}}){{/isMapContainer}}{{/dataType}}{{/-first}}{{/responses}}
-        , timeout = Just 30000
-        , tracker = {{#enableHttpRequestTrackers}}params.tracker{{/enableHttpRequestTrackers}}{{^enableHttpRequestTrackers}}Nothing{{/enableHttpRequestTrackers}}
-        }
+{{#bodyParam}}
+    {{^required}}Maybe {{/required}}{{dataType}} ->
+{{/bodyParam}}
+    Request {{^responses}}(){{/responses}}{{#responses}}{{#-first}}{{^dataType}}(){{/dataType}}{{#isMapContainer}}(Dict String {{/isMapContainer}}{{#isListContainer}}(List {{/isListContainer}}{{dataType}}{{#isListContainer}}){{/isListContainer}}{{#isMapContainer}}){{/isMapContainer}}{{/-first}}{{/responses}}
+{{operationId}}{{#pathParams}} {{paramName}}{{/pathParams}}{{#queryParams}} {{paramName}}{{/queryParams}}{{#headerParams}} {{paramName}}{{/headerParams}}{{#bodyParam}} body{{/bodyParam}} =
+    Request
+        {{httpMethod}}
+        [ {{{path}}} ]
+        (Maybe.values 
+            [ {{#queryParams}}{{^-first}}, {{/-first}}{{paramName}} 
+                {{#required}}|> Just{{/required}}
+                {{#isInteger}}|> Maybe.map String.fromInt{{/isInteger}}
+                {{^isInteger}}-- TODO: Query params other than integers are not supported by the OpenAPI code generator. Fix it in api.mustache file.{{/isInteger}}
+                |> Maybe.map ( Url.Builder.string "{{baseName}}")
+            {{/queryParams}}
+            ])
+        [ {- {{{headerParams}}} -} ]
+        {{#bodyParam}}(body |> {{^required}}Maybe.map {{/required}}{{vendorExtensions.elmEncoder}}{{#required}} |> Just{{/required}}){{/bodyParam}}{{^bodyParam}}Nothing{{/bodyParam}}
+        {{^responses}}Decode.succeed (){{/responses}}{{#responses}}{{#-first}}{{^dataType}}Decode.succeed (){{/dataType}}{{#dataType}}{{#isMapContainer}}(Decode.dict {{/isMapContainer}}{{#isListContainer}}(Decode.list {{/isListContainer}}{{#vendorExtensions}}{{elmDecoder}}{{/vendorExtensions}}{{#isListContainer}}){{/isListContainer}}{{#isMapContainer}}){{/isMapContainer}}{{/dataType}}{{/-first}}{{/responses}}
   {{/operation}}
 {{/operations}}
